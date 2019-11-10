@@ -2,6 +2,10 @@ import random
 import math
 import pygame
 import pygame.gfxdraw
+import pyaudio
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 # screen dimensions
 SCREEN_WIDTH = 800
@@ -38,8 +42,8 @@ ROWS = 7
 # ball
 BALL_WIDTH = BALL_HEIGHT = 16
 ANGLE = 200
-VELOCITY = 5
-VELOCITY_X = random.randint(2, 7)
+VELOCITY = 20
+VELOCITY_X = random.randint(7, 15)
 VELOCITY_Y = math.sqrt(VELOCITY_X * 2 + VELOCITY * 2)
 BALL_X = PADDLE_X + PADDLE_WIDTH / 2 - BALL_WIDTH / 2
 BALL_Y = PADDLE_Y - BALL_HEIGHT
@@ -79,9 +83,9 @@ class Paddle(pygame.sprite.Sprite):
 
     def update(self):
         self.rect = self.rect.move(self.movement)  # self.rect.move(self.movement) = self.rect + self.movement
-        if self.rect.left < 0: self.rect.x = 0
-        if self.rect.left >= SCREEN_WIDTH - PADDLE_WIDTH: self.rect.x = SCREEN_WIDTH - PADDLE_WIDTH
-
+        if self.rect.left <= -PADDLE_WIDTH: self.rect.x = SCREEN_WIDTH-1
+        if self.rect.left >= SCREEN_WIDTH: self.rect.x = 0
+    '''
     def keypress_movement(self):  # definition of the movement
         if event.type == pygame.KEYDOWN:  # holding down the key
             if event.key == pygame.K_LEFT:
@@ -93,6 +97,9 @@ class Paddle(pygame.sprite.Sprite):
             if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
                 mypaddle.movement[0] = 0
 
+    '''
+    def voice_movement(self):  # definition of the movement
+        self.movement[0] = 20 - peak/120
 
 class Block(pygame.sprite.Sprite):
     def __init__(self):
@@ -157,6 +164,16 @@ class Ball(pygame.sprite.Sprite):
             screen.blit(self.text, self.textpos)
 
 
+np.set_printoptions(suppress=True) # don't use scientific notation
+
+CHUNK = 4096 # number of data points to read at a time
+RATE = 44100 # time resolution of the recording device (Hz)
+
+p=pyaudio.PyAudio() # start the PyAudio class
+stream=p.open(format=pyaudio.paInt16,channels=1,rate=RATE,input=True,
+              frames_per_buffer=CHUNK) #uses default input device
+
+
 # create paddle
 mypaddle = Paddle()
 
@@ -177,8 +194,15 @@ for row in range(ROWS):
 
 # main loop of the game
 game_over = False
+flag =  False
 
 while not game_over:
+    flag = not flag
+    if flag == True:
+        data = np.fromstring(stream.read(CHUNK),dtype=np.int16)
+        peak=np.average(np.abs(data))*2
+        bars="#"*int(50*peak/2**16)
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             game_over = True
@@ -186,7 +210,7 @@ while not game_over:
             if event.key == pygame.K_ESCAPE:
                 game_over = True
 
-        mypaddle.keypress_movement()  # allow the paddle to move
+    mypaddle.voice_movement()  # allow the paddle to move
 
     clock.tick(FPS)  # clock set
     screen.fill(TEAL)  # clear the screen
@@ -212,5 +236,8 @@ while not game_over:
         mypaddle.draw()  # draw the paddle (in the new position)
 
     pygame.display.update()
-
+# close the stream gracefully
+stream.stop_stream()
+stream.close()
+p.terminate()
 pygame.quit()
